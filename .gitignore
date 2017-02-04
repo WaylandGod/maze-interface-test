@@ -1,5 +1,5 @@
 /[Ll]ibrary/
-/[Tt]emp/
+*/[Tt]emp/
 /[Oo]bj/
 /[Bb]uild/
 /[Bb]uilds/
@@ -17,6 +17,7 @@ ExportedObj/
 *.pidb
 *.booproj
 *.svd
+*.log
 
 
 # Unity3D generated meta files
