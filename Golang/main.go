@@ -19,6 +19,9 @@ func main() {
 	// Set up the HTTPS server:
 	serverMUX := http.NewServeMux()
 
+	// A Go channel in order to connect the agent processing with the reaction HTTP handler:
+	reactionChannel := make(chan string)
+
 	//
 	// A simulation for the maze channel. It should send the wall coordinates to the visualizer.
 	//
@@ -118,7 +121,26 @@ func main() {
 			fmt.Print(reaction)
 
 			// Write it to the HTTP channel:
-			// TODO
+			reactionChannel <- reaction
+		}
+	})
+
+	// This is the HTTP channel with the reactions for the visualizations:
+	serverMUX.HandleFunc("/reaction", func(w http.ResponseWriter, r *http.Request) {
+		for {
+
+			// Read one reaction:
+			reaction := <-reactionChannel
+
+			// Write the reaction to the HTTP stream:
+			fmt.Fprintf(w, "%s\n", reaction)
+
+			// Flush the data in order to use the HTTP channel as never ending stream:
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			} else {
+				fmt.Println("Damn, no flush")
+			}
 		}
 	})
 
