@@ -144,6 +144,26 @@ func main() {
 		}
 	})
 
+	// This is the HTTP channel to read player interactions from the visualization:
+	serverMUX.HandleFunc("/player", func(w http.ResponseWriter, r *http.Request) {
+
+		// In this case, we just read from the visualization:
+		reader := bufio.NewReader(r.Body)
+
+		// Create a writer and connect it to stdin:
+		stdinWriter := bufio.NewWriter(os.Stdin)
+
+		for {
+
+			// Read one line with player interaction i.e. angel and speed:
+			line, _ := reader.ReadString('\n')
+
+			// Write the data to stdin:
+			stdinWriter.WriteString(line + `\n`)
+			stdinWriter.Flush()
+		}
+	})
+
 	// Define the HTTP server:
 	server := &http.Server{}
 	server.Addr = ":50000"
