@@ -18,7 +18,13 @@ func main() {
 	// Set up the HTTPS server:
 	serverMUX := http.NewServeMux()
 
-	// A simulation for the maze channel. It should send the wall coordinates to the visualizer:
+	//
+	// A simulation for the maze channel. It should send the wall coordinates to the visualizer.
+	//
+	// Please notice:
+	// This implementation will create a new maze generate for each HTTP request. Thus, each
+	// client gets his own simulator. This behaviour is maybe not desired for the final implementation.
+	//
 	serverMUX.HandleFunc("/maze", func(w http.ResponseWriter, r *http.Request) {
 		for {
 
