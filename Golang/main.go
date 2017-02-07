@@ -10,6 +10,19 @@ import (
 )
 
 func main() {
+
+	//
+	// Remark
+	// In order to run this implementation, the provided HTTP handlers must get started.
+	// To do so, please start http://127.0.0.1:5000/maze, http://127.0.0.1:5000/agent,
+	// http://127.0.0.1:5000/reaction and http://127.0.0.1:5000/player Instead, just
+	// start the visualizer which connects to all of these end-points.
+	//
+	// This behaviour is not intended for the final implementation, where the HTTP handler
+	// are optional. This is just a test implementation in order to show the desired
+	// interface.
+	//
+
 	// Print the version:
 	fmt.Println(`maze-interface-test v1.0.0`)
 
