@@ -2,42 +2,71 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System.Net;
+using System.Net.Sockets;
 using System.IO;
 using System;
 using System.Linq;
 using System.Threading;
 
+// This component reads the maze walls and re-build the maze
 public class MazeReader : MonoBehaviour {
 
+	// The wall height
 	public int wallHeight = 20;
 
+	// The maze stream
 	private Stream mazeStream;
+
+	// The maze reader
 	private StreamReader mazeStreamReader;
+
+	// List of all current walls
 	private List<Wall> currentWalls = new List<Wall> ();
+
+	// Was there a change since the last frame?
 	private bool wallChanged = false;
+
+	// Stop the read-thread
 	private bool stopThread = false;
+
+	// The read-thread:
 	private Thread readThread;
+
+	// A rw-mutex in order to sync readers and writers:
 	private ReaderWriterLockSlim mutex = new ReaderWriterLockSlim ();
 
 	// Use this for initialization
 	void Start () {
-		
-		// Connect to the maze server:
-		var web = new WebClient ();
-		this.mazeStream = web.OpenRead("http://127.0.0.1:50000/maze");
+
+		while (true) {
+
+			try {
+
+				// Connect to the maze server:
+				var tcp = new TcpClient ("127.0.0.1", 50000);
+				this.mazeStream = tcp.GetStream ();
+				break;
+
+			} catch {
+			}
+		}
 
 		// Create a reader in order to read lines from the stream:
 		this.mazeStreamReader = new StreamReader (this.mazeStream);
 
+		// HTTP GET Request:
+		var writer = new StreamWriter(this.mazeStream);
+		writer.Write ("GET /maze HTTP/1.1\r\n");
+		writer.Write ("Host: 127.0.0.1\r\n");
+		writer.Write ("\r\n");
+		writer.Flush ();
+
 		// Create the reader thread:
 		this.readThread = new Thread (this.readThreadProcessor);
 		this.readThread.Start ();
-		Debug.Log ("Init done.");
 	}
 
 	void OnApplicationQuit() {
-		Debug.Log("Stop!");
-
 		try {
 			this.stopThread = true;
 		} catch {
@@ -75,9 +104,8 @@ public class MazeReader : MonoBehaviour {
 		// Do we got a new maze?
 		if (changed) {
 
-			Debug.Log ("Build new walls...");
-
-			// Delete all old walls:
+			// Delete all old walls. It works by using TAGs. Each wall gets tagged with "MazeWall".
+			// Then, all objects with the same TAG could be selected...
 			var oldWalls = GameObject.FindGameObjectsWithTag("MazeWall");
 			foreach (var oldWall in oldWalls) {
 				GameObject.Destroy (oldWall);
@@ -86,9 +114,9 @@ public class MazeReader : MonoBehaviour {
 			// Create new walls:
 			foreach (var wall in walls) {
 				var wallObject = GameObject.CreatePrimitive (PrimitiveType.Cube);
-				wallObject.tag = "MazeWall";
+				wallObject.tag = "MazeWall"; // Tag the new wall
 
-				// This is not currect, but it shows that the basic idea of Go <=> Unity by HTTP works:
+				// This is not currect, but it shows that the basic idea of Go <=> Unity by HTTP:
 				wallObject.transform.position = new Vector3 (wall.x2, this.wallHeight, wall.y2);
 				wallObject.transform.localScale = new Vector3 (wall.x1, this.wallHeight, wall.y1);
 			}
@@ -97,8 +125,6 @@ public class MazeReader : MonoBehaviour {
 
 	// Read all the time from the maze stream
 	void readThreadProcessor() {
-
-		Debug.Log ("Maze Read Thread started.");
 
 		while (!this.stopThread) {
 
@@ -118,8 +144,22 @@ public class MazeReader : MonoBehaviour {
 
 				// Read all walls:
 				for (int n = 0; n < countWalls; n++) {
+
+					// Read the next line and split the coordinates:
 					var wallLine = this.mazeStreamReader.ReadLine ();
 					var wallCoordinateText = wallLine.Split (';').ToArray ();
+
+					// Ensure, that this line was valid -- we need 4 coordinates per line!
+					if (wallCoordinateText.Length != 4) {
+
+						// This line was garbage. Read the next line:
+						n++;
+						continue;
+					}
+
+					// The line is valid. Construct a wall object with this
+					// coordinates. It is just a intermediate representation
+					// which gets visualized at the next frame:
 					var wall = new Wall ();
 					wall.x1 = int.Parse (wallCoordinateText [0]);
 					wall.y1 = int.Parse (wallCoordinateText [1]);
@@ -128,7 +168,7 @@ public class MazeReader : MonoBehaviour {
 					walls.Add (wall);
 				}
 
-				// Commit the changed maze thread-safe:
+				// Commit the changed maze thread-safely:
 				this.mutex.EnterWriteLock();
 				try {
 					this.currentWalls.Clear();

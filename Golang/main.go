@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -23,9 +24,6 @@ func main() {
 	// interface.
 	//
 
-	// Print the version:
-	fmt.Println(`maze-interface-test v1.0.0`)
-
 	// Set the seed for the random function:
 	rand.Seed(time.Now().Unix())
 
@@ -34,6 +32,9 @@ func main() {
 
 	// A Go channel in order to connect the agent processing with the reaction HTTP handler:
 	reactionChannel := make(chan string)
+
+	// A Go channel in order to connect the stdin and player reader towards the agent handler:
+	actionChannel := make(chan string)
 
 	//
 	// A simulation for the maze channel. It should send the wall coordinates to the visualizer.
@@ -81,15 +82,21 @@ func main() {
 	//
 	serverMUX.HandleFunc("/agent", func(w http.ResponseWriter, r *http.Request) {
 
-		// Create a reader and connect it to stdin:
-		stdinReader := bufio.NewReader(os.Stdin)
+		// Send the START signal:
+		fmt.Fprint(w, "START\n")
 
 		for {
-			// Read the next line i.e. action of the agent:
-			line, _ := stdinReader.ReadString('\n')
+
+			// Read one action ... from stdin or player handler:
+			line := <-actionChannel
+
+			// Check the right format:
+			if len(strings.Split(line, `;`)) != 2 {
+				continue
+			}
 
 			// Forward the data to the HTTP channel:
-			fmt.Fprintf(w, "%s\n", line)
+			fmt.Fprintf(w, "%s", line) // Line includes \n!
 
 			// Flush the data in order to use the HTTP channel as never ending stream:
 			if f, ok := w.(http.Flusher); ok {
@@ -99,11 +106,11 @@ func main() {
 			}
 
 			//
-			// TODO: Use the data to calculate some reaction of the maze...
+			// TODO: Use the data to calculate some reaction of the maze by processing the input i.e. action (speed & degree)
 			//
 
 			//
-			// Simulate the reaction:
+			// Simulate the reaction
 			//
 
 			// 6 Range finder sensors i.e. distance to the next walls:
@@ -140,13 +147,22 @@ func main() {
 
 	// This is the HTTP channel with the reactions for the visualizations:
 	serverMUX.HandleFunc("/reaction", func(w http.ResponseWriter, r *http.Request) {
+
+		// Send the START signal:
+		fmt.Fprint(w, "START\n")
+
 		for {
 
 			// Read one reaction:
 			reaction := <-reactionChannel
 
+			// Check the right format:
+			if len(strings.Split(reaction, `;`)) != 14 {
+				continue
+			}
+
 			// Write the reaction to the HTTP stream:
-			fmt.Fprintf(w, "%s\n", reaction)
+			fmt.Fprintf(w, "%s", reaction) // The reaction string has already the \n!
 
 			// Flush the data in order to use the HTTP channel as never ending stream:
 			if f, ok := w.(http.Flusher); ok {
@@ -163,19 +179,46 @@ func main() {
 		// In this case, we just read from the visualization:
 		reader := bufio.NewReader(r.Body)
 
-		// Create a writer and connect it to stdin:
-		stdinWriter := bufio.NewWriter(os.Stdin)
-
 		for {
 
 			// Read one line with player interaction i.e. angel and speed:
-			line, _ := reader.ReadString('\n')
+			line, errRead := reader.ReadString('\n') // Line includes \n!
 
-			// Write the data to stdin:
-			stdinWriter.WriteString(line + `\n`)
-			stdinWriter.Flush()
+			if errRead != nil {
+				fmt.Println(errRead.Error())
+				return
+			}
+
+			// Check if the line is empty:
+			if strings.TrimSpace(line) == `` {
+				continue
+			}
+
+			// Check the right format:
+			if len(strings.Split(line, `;`)) != 2 {
+				continue
+			}
+
+			// Write the data to the processor:
+			actionChannel <- line
 		}
 	})
+
+	// Read from stdin
+	go func() {
+
+		// Create a reader and connect it to stdin:
+		stdinReader := bufio.NewReader(os.Stdin)
+
+		for {
+
+			// Read the next line i.e. action of the agent:
+			line, _ := stdinReader.ReadString('\n') // Format: degree;speed ... line includes \n!
+
+			// Write the data to the processor:
+			actionChannel <- line
+		}
+	}()
 
 	// Define the HTTP server:
 	server := &http.Server{}

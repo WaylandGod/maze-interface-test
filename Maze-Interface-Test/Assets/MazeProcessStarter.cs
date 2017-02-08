@@ -3,14 +3,23 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Diagnostics;
 
+// This component starts the external maze simulator
 public class MazeProcessStarter : MonoBehaviour {
 
 	public string pathToMazeServer = "maze-server";
+	public bool startExternalProcess = true;
 
 	private Process mazeProcess;
 
 	// Use this for initialization
 	void Start () {
+
+		if (!this.startExternalProcess) {
+			UnityEngine.Debug.Log ("Does not start the maze process.");
+			return;
+		}
+
+		UnityEngine.Debug.Log ("Start the maze process.");
 
 		// Start parameters for the maze proces:
 		var startParams = new ProcessStartInfo ();
